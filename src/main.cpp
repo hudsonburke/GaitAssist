@@ -11,22 +11,22 @@
 #define MOTOR_ANG_VEL_MAX (MOTOR_RPM_MAX * PI / 30.0) // rad/s
 
 #define KU 7 // Ultimate gain
-#define TU 0.5 // Ultimate period (seconds)
-#define KP KU //(0.6 * KU) // Proportional gain
-#define KI (0.1 * KU / TU) // Integral gain
+#define TU 0.33 // Ultimate period (seconds)
+#define KP (0.6 * KU) // Proportional gain
+#define KI (1.2 * KU / TU) // Integral gain
 #define KD (0.075 * KU * TU) // Derivative gain
 #define WINDOW_SIZE 10 // Number of samples for integral calculation
 
-#define TARGET_TENSION 25 // Newtons
+#define TARGET_TENSION 50 // Newtons
 #define M_DISK 0.5 // kg
 #define R_DISK 0.15 // m
 #define I_DISK (0.5 * M_DISK * R_DISK * R_DISK) // kg*m^2
 #define GEAR_RATIO 32 // 32:1
 
 // Load cell and amplifier parameters
-#define LOAD_CAPACITY 900 // N
-#define AMP_VOLT_MIN 0.0 // V
-#define AMP_VOLT_MAX 5.0 // V
+#define LOAD_CAPACITY 900 // N (in single direction i.e. AMP_VOLT_MID to AMP_VOLT_MAX)
+#define AMP_VOLT_MIN -10.0 // V
+#define AMP_VOLT_MAX 10.0 // V
 #define AMP_VOLT_MID (AMP_VOLT_MIN + AMP_VOLT_MAX) / 2.0 // V
 
 #define ADC_RESOLUTION 1024 // 10-bit ADC resolution
@@ -37,6 +37,9 @@
 #define START_RPM 0.0 // MOTOR_RPM_MAX
 #define START_ANG_VEL (START_RPM * PI / 30.0) // rad/s
 #define TRIAL_DURATION 10000 // milliseconds
+
+#define LOOP_FREQUENCY 50 // Hz
+#define LOOP_DELAY (1000 / LOOP_FREQUENCY) // milliseconds
 
 // put function declarations here:
 
@@ -61,7 +64,15 @@ void setup() {
 }
 
 void loop() {
-  
+  static unsigned long lastLoopTime = 0;
+  unsigned long currentTime = millis();
+
+  if (currentTime - lastLoopTime < LOOP_DELAY) {
+    return; // Skip this iteration to maintain the desired frequency
+  }
+  float deltaTime = (currentTime - lastLoopTime) / 1000.0; // Convert to seconds
+  lastLoopTime = currentTime;
+
   static float prevError = 0.0;
   static float integral = 0.0;
   static float errorWindow[WINDOW_SIZE] = {0};
@@ -79,7 +90,7 @@ void loop() {
 
   // Convert load cell voltage to force: The middle of the range is 0N, negative force moves voltage down
   // and positive force moves voltage up. The slope is (LOAD_CAPACITY / (AMP_VOLT_MAX - AMP_VOLT_MIN))
-  float loadCellForce = (loadCellVoltage - AMP_VOLT_MID) * (LOAD_CAPACITY / (AMP_VOLT_MAX - AMP_VOLT_MIN));
+  float loadCellForce = (loadCellVoltage - AMP_VOLT_MID) * (LOAD_CAPACITY / (AMP_VOLT_MAX - AMP_VOLT_MID));
   Serial.print(">loadCellForce:");
   Serial.println(loadCellForce);
   
@@ -87,28 +98,37 @@ void loop() {
   Serial.print(">tension:");
   Serial.println(tension);
 
-  // PID control
+  // Proportional
   float forceError = TARGET_TENSION - tension;
   Serial.print(">forceError:");
   Serial.println(forceError);
-  integral -= errorWindow[0];
+
+  // Integral
   integral += forceError;
+  integral -= errorWindow[windowIndex];
   Serial.print(">integral:");
   Serial.println(integral);
   errorWindow[windowIndex] = forceError;
   windowIndex = (windowIndex + 1) % WINDOW_SIZE;
-  float derivative = forceError - prevError;
+
+  // Derivative (adjusted for timing)
+  float derivative = (forceError - prevError) / deltaTime;
   Serial.print(">derivative:");
   Serial.println(derivative);
   prevError = forceError;
+
+  // PID control signal
   float controlSignal = KP * forceError + KI * integral + KD * derivative;
   Serial.print(">controlSignal:");
   Serial.println(controlSignal);
   
-  // Control motor speed
-  float targetAngVel = prevAngVel + (R_DISK * controlSignal / I_DISK) * GEAR_RATIO;
+  // Control motor speed (adjusted for timing)
+  float targetAngVel = prevAngVel + ((R_DISK * controlSignal / I_DISK) * GEAR_RATIO * deltaTime);
   Serial.print(">targetAngVel:");
   Serial.println(targetAngVel);
+  // Constrain target angular velocity to a maximum value
+  targetAngVel = constrain(targetAngVel, 0, MOTOR_ANG_VEL_MAX);
+  Serial.print(">constrainedTargetAngVel:");
   prevAngVel = targetAngVel;
 
   // Map angular velocity to motor voltage
@@ -118,12 +138,14 @@ void loop() {
   Serial.print(">motorVoltage:");
   Serial.println(motorVoltage);
 
-  float pwmAngVel = map(motorVoltage, MOTOR_VOLT_MIN, MOTOR_VOLT_MAX, 0, 255);
-  pwmAngVel = constrain(pwmAngVel, 0, 255); // Constrain to valid PWM range
-  Serial.print(">pwmAngVel:");
-  Serial.println(pwmAngVel);
+  // Convert motor voltage to PWM value
+  int pwmValue = int(motorVoltage * (255.0 / ADC_REF_VOLTAGE)); // Convert to PWM value
+  pwmValue = constrain(pwmValue, 0, 255); // Constrain to valid PWM range
+  Serial.print(">pwmValue:");
+  Serial.println(pwmValue);
   
-  analogWrite(MOTOR_PIN, pwmAngVel);
+  analogWrite(MOTOR_PIN, pwmValue); // Set motor speed
+
   static unsigned long startTime = millis();
   if (millis() - startTime > TRIAL_DURATION) {
     Serial.println("Stopping motor");
