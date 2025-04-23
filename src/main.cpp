@@ -2,12 +2,12 @@
 
 // Motor parameters
 #define MOTOR_PIN 3
-#define PI 3.14159265358979323846 // Define PI explicitly
+// #define PI 3.14159265358979323846 // Define PI explicitly
 #define MOTOR_VOLT_MIN 1.5 // V
 #define MOTOR_VOLT_MAX 4.0 // V
 #define MOTOR_RPM_MAX 4000 // rpm
 #define MOTOR_ANG_VEL_MAX (MOTOR_RPM_MAX * PI / 30.0) // rad/s
-#define MOTOR_EFFICIENCY 0.85 // Motor efficiency factor
+#define MOTOR_EFFICIENCY 1.0 // Motor efficiency factor
 #define MOTOR_VOLT_PER_ANG_VEL ((MOTOR_VOLT_MAX - MOTOR_VOLT_MIN) / MOTOR_ANG_VEL_MAX)
 
 // PID parameters
@@ -43,7 +43,7 @@
 #define PWM_RESOLUTION 255 // 8-bit PWM resolution
 #define PWM_VOLT_PER_UNIT (PWM_REF_VOLTAGE / PWM_RESOLUTION) // V/step
 
-#define START_RPM 0.0
+#define START_RPM 0.0 
 #define START_ANG_VEL (START_RPM * PI / 30.0) // rad/s
 #define TRIAL_DURATION 10000 // milliseconds
 
@@ -89,8 +89,7 @@ void setup() {
   float startMotorVoltage = MOTOR_VOLT_MIN + START_ANG_VEL * MOTOR_VOLT_PER_ANG_VEL;
   int startPwmValue = int(startMotorVoltage / PWM_VOLT_PER_UNIT);
   startPwmValue = constrain(startPwmValue, 0, 255);
-  analogWrite(MOTOR_PIN, startPwmValue); // Start with motor off
-  analogWrite(MOTOR_PIN, START_ANG_VEL); // Start with motor off
+  analogWrite(MOTOR_PIN, startPwmValue);
 }
 
 void loop() {
@@ -154,6 +153,8 @@ void loop() {
     Serial.print(">forceError:"); Serial.println(forceError);
     Serial.print(">integral:"); Serial.println(integral);
     Serial.print(">derivative:"); Serial.println(derivative);
+    Serial.print(">motorVoltage:"); Serial.println(motorVoltage);
+    Serial.print(">pwmValue:"); Serial.println(pwmValue);
     Serial.print(">controlSignal:"); Serial.println(controlSignal);
   }
 
