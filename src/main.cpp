@@ -15,7 +15,7 @@
 #define TU 0.33 // Ultimate period (seconds)
 #define KP (0.6 * KU) // Proportional gain
 #define KI (1.2 * KU / TU) // Integral gain
-#define KD (1.0 * KU * TU) // Derivative gain
+#define KD (0.075 * KU * TU) // Derivative gain
 #define WINDOW_SIZE 10 // Number of samples for integral calculation
 
 #define M_DISK 0.5 // kg
@@ -121,8 +121,9 @@ void loop() {
 
   // PID calculations
   float forceError = targetTension - tension;
-  integral += (forceError * deltaTime) - errorWindow[windowIndex];
-  errorWindow[windowIndex] = forceError;
+  float intForceError = forceError * deltaTime;
+  integral += intForceError - errorWindow[windowIndex];
+  errorWindow[windowIndex] = intForceError;
   windowIndex = (windowIndex + 1) % WINDOW_SIZE;
 
   float derivative = (deltaTime > 0.0) ? (forceError - prevError) / deltaTime : 0.0;
