@@ -53,6 +53,8 @@
 #define DEBUG true // Set to false to disable debug prints
 
 float targetTension = 0.0;
+int loopIndex = 0;
+void initializeMotor();
 
 void setup() {
   // put your setup code here, to run once:
@@ -62,34 +64,7 @@ void setup() {
     Serial.println("Warning: Debug mode is enabled. This may affect performance.");
   }
   Serial.println("Setup complete");
-  Serial.println("Enter the target tension (N):");
-  while (true) {
-    if (Serial.available()) {
-      targetTension = Serial.parseFloat();
-      if (targetTension > 0.0) {
-        Serial.print("Target tension set to: ");
-        Serial.println(targetTension);
-        break;
-      } else {
-        Serial.println("Invalid input. Please enter a positive number.");
-      }
-    }
-  }
-  Serial.println("Enter '1' to start the motor:");
-  // Wait for user input to start the motor
-  while (true) {
-    if (Serial.available()) {
-      char c = Serial.read();
-      if (c == '1') {
-        Serial.println("Starting motor");
-        break;
-      }
-    }
-  }
-  float startMotorVoltage = MOTOR_VOLT_MIN + START_ANG_VEL * MOTOR_VOLT_PER_ANG_VEL;
-  int startPwmValue = int(startMotorVoltage / PWM_VOLT_PER_UNIT);
-  startPwmValue = constrain(startPwmValue, 0, 255);
-  analogWrite(MOTOR_PIN, startPwmValue);
+  initializeMotor();
 }
 
 void loop() {
@@ -148,24 +123,63 @@ void loop() {
 
   // Debug prints
   if (DEBUG) {
+    Serial.print(">loopIndex:"); Serial.println(loopIndex);
+    loopIndex++;
     float loopFrequency = 1.0 / deltaTime; // Hz
     Serial.print(">loopFrequency:"); Serial.println(loopFrequency);
     Serial.print(">tension:"); Serial.println(tension);
     Serial.print(">forceError:"); Serial.println(forceError);
     Serial.print(">integral:"); Serial.println(integral);
     Serial.print(">derivative:"); Serial.println(derivative);
+    Serial.print(">controlSignal:"); Serial.println(controlSignal);
     Serial.print(">motorVoltage:"); Serial.println(motorVoltage);
     Serial.print(">pwmValue:"); Serial.println(pwmValue);
-    Serial.print(">controlSignal:"); Serial.println(controlSignal);
   }
 
-  // Stop motor after trial duration
-  static unsigned long startTime = millis();
-  if (millis() - startTime > TRIAL_DURATION) {
-    analogWrite(MOTOR_PIN, 0); // Stop the motor
-    Serial.println("Trial duration exceeded. Stopping motor.");
-    while (true) {
-      // Wait indefinitely
+  if (Serial.available()) {
+    char c = Serial.read();
+    if (c == 'q') {
+      Serial.println("Stopping motor");
+      analogWrite(MOTOR_PIN, 0); // Stop the motor
+      while (true) {
+        // Wait indefinitely
+      }
+    } else if (c == 'r') {
+      Serial.println("Resetting motor");
+      analogWrite(MOTOR_PIN, 0); // Stop the motor
+      initializeMotor(); // Reinitialize the motor
     }
   }
+}
+
+void initializeMotor() {
+  Serial.println("Enter the target tension (N):");
+  while (true) {
+    if (Serial.available()) {
+      targetTension = Serial.parseFloat();
+      if (targetTension > 0.0) {
+        Serial.print("Target tension set to: ");
+        Serial.println(targetTension);
+        break;
+      } else {
+        Serial.println("Invalid input. Please enter a positive float.");
+      }
+    }
+  }
+  Serial.println("Enter '1' to start the motor:");
+  // Wait for user input to start the motor
+  while (true) {
+    if (Serial.available()) {
+      char c = Serial.read();
+      if (c == '1') {
+        Serial.println("Starting motor");
+        break;
+      }
+    }
+  }
+  float startMotorVoltage = MOTOR_VOLT_MIN + START_ANG_VEL * MOTOR_VOLT_PER_ANG_VEL;
+  int startPwmValue = int(startMotorVoltage / PWM_VOLT_PER_UNIT);
+  startPwmValue = constrain(startPwmValue, 0, 255);
+  analogWrite(MOTOR_PIN, startPwmValue);
+  loopIndex = 0;
 }
